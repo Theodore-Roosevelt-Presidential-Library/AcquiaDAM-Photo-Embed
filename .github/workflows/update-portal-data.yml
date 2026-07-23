@@ -1,31 +1,36 @@
 name: Update portal data
 
-# Refreshes the static gallery snapshot in ./data. Acquia's pre-signed
-# preview thumbnail URLs expire (~7 days), so we regenerate every 6 hours
-# to keep them well ahead of expiry. Also runnable on demand, and on any
-# change to the portal config or the generator itself.
+# Regenerates the static gallery snapshot in ./data AND deploys the site
+# to GitHub Pages in a single run. Acquia's pre-signed preview thumbnail
+# URLs expire (~7 days), so this runs every 6 hours to refresh them.
+#
+# Pages "Source" must be set to "GitHub Actions" (Settings > Pages).
+# We do generate + deploy in ONE job on purpose: a commit pushed by the
+# built-in GITHUB_TOKEN does not trigger other workflows, so a separate
+# deploy workflow would never fire on a scheduled data refresh.
 
 on:
   schedule:
     - cron: '0 */6 * * *'   # every 6 hours
   workflow_dispatch:         # manual "Run workflow" button
   push:
-    branches: [main]
-    paths:
-      - 'config.json'
-      - 'scripts/generate-portal-data.js'
-      - '.github/workflows/update-portal-data.yml'
+    branches: [main]         # redeploy whenever main changes
 
 permissions:
-  contents: write
+  contents: write            # commit refreshed data
+  pages: write               # deploy to Pages
+  id-token: write            # required by deploy-pages
 
 concurrency:
-  group: update-portal-data
+  group: pages
   cancel-in-progress: false
 
 jobs:
-  refresh:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,14 +43,26 @@ jobs:
       - name: Generate snapshot
         run: node scripts/generate-portal-data.js
 
-      - name: Commit updated data
+      - name: Commit refreshed data (for history)
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if [ -n "$(git status --porcelain data)" ]; then
             git add data
-            git commit -m "chore(data): refresh portal snapshot [skip ci]"
+            git commit -m "chore(data): refresh portal snapshot"
             git push
           else
-            echo "No changes to portal data."
+            echo "No data changes to commit."
           fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'          # publish the whole repo (embed js, data/, demo.html)
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
