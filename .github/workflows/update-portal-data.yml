@@ -1,0 +1,51 @@
+name: Update portal data
+
+# Refreshes the static gallery snapshot in ./data. Acquia's pre-signed
+# preview thumbnail URLs expire (~7 days), so we regenerate every 6 hours
+# to keep them well ahead of expiry. Also runnable on demand, and on any
+# change to the portal config or the generator itself.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:         # manual "Run workflow" button
+  push:
+    branches: [main]
+    paths:
+      - 'config.json'
+      - 'scripts/generate-portal-data.js'
+      - '.github/workflows/update-portal-data.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-portal-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate snapshot
+        run: node scripts/generate-portal-data.js
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain data)" ]; then
+            git add data
+            git commit -m "chore(data): refresh portal snapshot [skip ci]"
+            git push
+          else
+            echo "No changes to portal data."
+          fi

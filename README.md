@@ -1,101 +1,108 @@
 # AcquiaDAM-Photo-Embed
 
-A lightweight, dependency-free embed for **Acquia DAM (Widen) portals**. Drop it on any page and it renders a responsive, self-sizing iframe of your portal. Galleries open **natively inside the frame**, so visitors browse and download press assets without leaving your site. It works with **any** Acquia DAM portal — just point it at the portal URL.
+A lightweight, dependency-free embed that renders an **Acquia DAM (Widen) press portal** as **native gallery tiles** on your own page. The grid grows to fit its content — no fixed-height iframe, no interior scrollbar. Clicking a tile opens that specific gallery in a **lightbox** (an embedded, deep-linked iframe of the real portal), so visitors browse and **download** press assets without leaving your site.
 
-## Why this exists
+It works with **any** Acquia DAM portal — a small scheduled job snapshots the portal's galleries so the page can render them.
 
-The previous embed was a plain iframe locked to `height="700"`, which produced a cramped box with an awkward inner scrollbar. This version fixes the sizing (fills the viewport responsively) and turns the embed into a single, reusable, configurable snippet.
+## How it works
+
+```
+Acquia portal ──(GitHub Action, every 6h)──▶ data/<shortcode>.json ──(GitHub Pages)──▶ your page
+                  scripts/generate-portal-data.js                     acquia-portal-embed.js renders tiles
+```
+
+1. **Snapshot.** `scripts/generate-portal-data.js` fetches the portal's sections and galleries (titles, item counts, and Acquia's own pre-signed preview thumbnails) and writes a small static `data/<shortcode>.json`. It runs server-side, where Acquia's cross-origin block doesn't apply.
+2. **Host.** The JSON is committed to this repo and served by **GitHub Pages** (`https://portalphotos.labs.trlibrary.com/…`), which adds the CORS header the browser needs.
+3. **Render.** `acquia-portal-embed.js`, dropped on your site, fetches that JSON and builds the native tile grid. Because the tiles are ordinary page content, the block auto-sizes to fit — solving the fixed-height/scrollbar problem of a raw portal iframe.
+4. **Open.** Clicking a tile opens the real gallery, deep-linked by path (`…/PressPortal/c/{collectionId}/s/{sectionId}?embedded=true`), inside a lightbox iframe with its native download controls.
+
+### Why not just fetch the portal live, or auto-size an iframe?
+
+The Acquia portal JSON API sends no CORS headers, so a browser on your domain can't read it directly — hence the server-side snapshot. And a raw cross-origin portal iframe can't auto-fit its height (Acquia broadcasts no height and we can't inject a script into their frame), which is why the tiles are rendered natively instead.
 
 ## Quick start
 
-Paste this where you want the portal to appear (e.g. a WordPress **Custom HTML** block, a Duda HTML widget, or any raw-HTML section). Host `acquia-portal-embed.js` somewhere on your site and reference it, or use your own CDN/path.
+Paste this where you want the galleries to appear (a WordPress **Custom HTML** block, a Duda HTML widget, any raw-HTML section):
 
 ```html
 <script
-  src="/path/to/acquia-portal-embed.js"
-  data-portal-url="https://trlibrary.acquiadam.com/portals/ob41lpui/PressPortal"
-  data-height="responsive"
-  data-embedded="true"></script>
+  src="https://portalphotos.labs.trlibrary.com/acquia-portal-embed.js"
+  data-data-url="https://portalphotos.labs.trlibrary.com/data/ob41lpui.json"
+  data-accent="#1f5c3d"></script>
 ```
 
-That's it. The script inserts the gallery iframe right where the tag sits.
+That's the whole embed. The tiles render inline where the tag sits, and grow to fit.
 
-### Point it at a different portal
+### Use it for a different portal
 
-Change one attribute:
+1. Add the portal to `config.json`:
 
-```html
-data-portal-url="https://YOURACCOUNT.acquiadam.com/portals/SHORTCODE/PortalName"
-```
+   ```json
+   { "portals": [
+       { "domain": "trlibrary.acquiadam.com", "shortcode": "ob41lpui", "path": "PressPortal" },
+       { "domain": "YOURACCT.acquiadam.com", "shortcode": "SHORTCODE", "path": "PortalName" }
+   ] }
+   ```
 
-Or build the URL from parts instead of pasting it whole:
+   (`path` is the portal's URL name — the segment after the shortcode, spaces removed, e.g. `PressPortal`.)
 
-```html
-<script
-  src="/path/to/acquia-portal-embed.js"
-  data-domain="trlibrary.acquiadam.com"
-  data-shortcode="ob41lpui"
-  data-path="PressPortal"></script>
-```
+2. Commit. The GitHub Action regenerates `data/<shortcode>.json` on the next run (or trigger **Run workflow** manually).
+3. Point a second embed at `…/data/<shortcode>.json`.
 
 ## Configuration
 
-All options are `data-*` attributes on the `<script>` tag (or keys passed to `AcquiaPortalEmbed.init({...})`).
+All options are `data-*` attributes on the `<script>` tag (or keys to `AcquiaPortalEmbed.init({...})`).
 
-| Attribute            | Default        | Description |
-|----------------------|----------------|-------------|
-| `data-portal-url`    | —              | Full portal URL. Provide this **or** `data-domain` + `data-shortcode`. |
-| `data-domain`        | —              | Portal host, e.g. `trlibrary.acquiadam.com`. |
-| `data-shortcode`     | —              | Portal short code, e.g. `ob41lpui`. |
-| `data-path`          | `Portal`       | Portal URL name segment, e.g. `PressPortal`. |
-| `data-embedded`      | `true`         | Appends `?embedded=true` (Acquia's lighter presentation). |
-| `data-collection`    | —              | A collection/gallery ID to open directly on load (deep-link). |
-| `data-height`        | `responsive`   | `responsive`, a pixel value (`1200` / `1200px`), or any CSS length (`90vh`). |
-| `data-min-height`    | `680`          | Minimum px height in `responsive` mode. |
-| `data-max-height`    | `1500`         | Maximum px height in `responsive` mode. |
-| `data-viewport-ratio`| `0.9`          | Fraction of the window height used in `responsive` mode. |
-| `data-border-radius` | `10px`         | Corner rounding of the frame. |
-| `data-shadow`        | `true`         | Subtle drop shadow around the frame. |
-| `data-background`    | `#ffffff`      | Frame background (shown while loading). |
-| `data-target`        | —              | CSS selector of a container to render into (instead of inline). |
-| `data-title`         | `Press portal gallery` | Accessible iframe title. |
+| Attribute                 | Default          | Description |
+|---------------------------|------------------|-------------|
+| `data-data-url`           | — (required)     | URL of the JSON snapshot. |
+| `data-target`             | —                | CSS selector to render into (default: inline, after the script). |
+| `data-min-tile`           | `260`            | Minimum tile width (px); the grid auto-fills columns. |
+| `data-gap`                | `18`             | Grid gap (px). |
+| `data-radius`             | `12`             | Corner radius (px). |
+| `data-accent`             | `#1f5c3d`        | Heading rule + count-badge color. |
+| `data-aspect`             | `3 / 2`          | Tile thumbnail aspect ratio. |
+| `data-show-section-headings` | `true`        | Show each section's name as a heading. |
+| `data-show-counts`        | `true`           | Show the "N photos" badge on each tile. |
+| `data-lightbox`           | `true`           | `true` = open in lightbox; `false` = open in a new tab. |
+| `data-embedded`           | `true`           | Use Acquia's `?embedded=true` mode in the lightbox iframe. |
+| `data-title`              | `Press gallery`  | Accessible label for the region. |
 
 ### Programmatic use
 
-If your CMS strips inline `data-*` config, include the library once and call it yourself:
-
 ```html
-<div id="press-portal"></div>
-<script src="/path/to/acquia-portal-embed.js"></script>
+<div id="press"></div>
+<script src="https://portalphotos.labs.trlibrary.com/acquia-portal-embed.js"></script>
 <script>
   AcquiaPortalEmbed.init({
-    portalUrl: 'https://trlibrary.acquiadam.com/portals/ob41lpui/PressPortal',
-    target: '#press-portal',
-    height: 'responsive'
+    dataUrl: 'https://portalphotos.labs.trlibrary.com/data/ob41lpui.json',
+    target: '#press'
   });
 </script>
 ```
 
-### Deep-link to a specific gallery
+## Keeping it fresh
 
-Open straight into one collection by passing its ID:
-
-```html
-data-collection="5759cf07-5c2e-4ff9-a15b-ac5a08a7bd77"
-```
-
-(The ID is the hash you see in the portal URL when you open a gallery, e.g. `…/PressPortal#5759cf07-…`.)
-
-## How it works (and the one limitation)
-
-- **No backend, no API keys, no CORS proxy.** The Acquia portal JSON API blocks cross-origin browser requests, so a script on your domain can't fetch portal data directly. The portal *page*, however, renders fine inside a cross-origin iframe — so this embed uses the iframe and always shows live, current galleries.
-- **Height is responsive, not pixel-perfect.** Acquia portals don't broadcast their content height to the parent page, so a cross-origin frame can't shrink-wrap to the exact height of its content. Instead the embed sizes the frame to a generous share of the viewport (within `min-height`/`max-height`) so the gallery grid shows without a cramped scrollbar, and the portal manages its own internal scrolling. If Acquia ever enables `postMessage` height broadcasting (or an iframe-resizer child script), true auto-fit could be added.
+Acquia's preview thumbnail URLs are pre-signed and **expire (~7 days)**. The GitHub Action (`.github/workflows/update-portal-data.yml`) regenerates the snapshot **every 6 hours**, so thumbnails are always refreshed well before expiry. You can also run it on demand from the repo's **Actions** tab, and it auto-runs whenever `config.json` or the generator changes.
 
 ## Files
 
-- `acquia-portal-embed.js` — the embed library (this is what you host and reference).
-- `demo.html` — a working demo, preconfigured for the TR Library Press Portal.
-- `README.md` — this file.
+| File | Purpose |
+|------|---------|
+| `acquia-portal-embed.js` | The embed. Renders native tiles + lightbox. Host and reference this. |
+| `scripts/generate-portal-data.js` | Node generator that writes the `data/<shortcode>.json` snapshot. |
+| `config.json` | List of portals to snapshot. |
+| `data/<shortcode>.json` | Generated snapshot(s), served via GitHub Pages. |
+| `.github/workflows/update-portal-data.yml` | Scheduled refresh (every 6h) + manual trigger. |
+| `demo.html` | Working demo, preconfigured for the TR Library Press Portal. |
+
+## Running the generator locally
+
+```bash
+node scripts/generate-portal-data.js         # uses config.json
+```
+
+Requires Node 18+ (uses the built-in `fetch`).
 
 ## License
 
