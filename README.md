@@ -57,16 +57,25 @@ All options are `data-*` attributes on the `<script>` tag (or keys to `AcquiaPor
 |---------------------------|------------------|-------------|
 | `data-data-url`           | — (required)     | URL of the JSON snapshot. |
 | `data-target`             | —                | CSS selector to render into (default: inline, after the script). |
-| `data-min-tile`           | `260`            | Minimum tile width (px); the grid auto-fills columns. |
-| `data-gap`                | `18`             | Grid gap (px). |
-| `data-radius`             | `12`             | Corner radius (px). |
-| `data-accent`             | `#1f5c3d`        | Heading rule + count-badge color. |
+| `data-min-tile`           | `264`            | Minimum tile width (px); the grid auto-fills columns. |
+| `data-gap`                | `20`             | Grid gap (px). |
+| `data-radius`             | `2`              | Tile corner radius (px). TR uses near-square corners. |
 | `data-aspect`             | `3 / 2`          | Tile thumbnail aspect ratio. |
+| `data-accent`             | `#1B4633`        | Primary green: heading text + focus ring. |
+| `data-rule`               | `#E7805D`        | Terracotta: heading underline. |
+| `data-badge-bg`           | `#E7805D`        | Count-badge background. |
+| `data-badge-text`         | `#25282A`        | Count-badge text. |
+| `data-title-color`        | `#25282A`        | Tile title text color. |
+| `data-heading-font`       | Dharma Gothic E… | Section-heading font stack. |
+| `data-heading-uppercase`  | `true`           | Uppercase the section headings. |
+| `data-title-font`         | Frutiger…        | Tile-title / badge / UI font stack. |
 | `data-show-section-headings` | `true`        | Show each section's name as a heading. |
 | `data-show-counts`        | `true`           | Show the "N photos" badge on each tile. |
 | `data-lightbox`           | `true`           | `true` = open in lightbox; `false` = open in a new tab. |
 | `data-embedded`           | `true`           | Use Acquia's `?embedded=true` mode in the lightbox iframe. |
 | `data-title`              | `Press gallery`  | Accessible label for the region. |
+
+**Brand styling.** Defaults match the Theodore Roosevelt Presidential Library site — Dharma Gothic E (headings), Frutiger (labels), green `#1B4633` and terracotta `#E7805D`. Those fonts are pulled from the host page, so the embed inherits the real brand faces when placed on `trlibrary.com`. On other sites, override the font/color attributes above (or the fonts fall back to a condensed sans + system UI sans).
 
 ### Programmatic use
 
