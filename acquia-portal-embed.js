@@ -4,16 +4,22 @@
  * Renders an Acquia DAM (Widen) press portal's galleries as NATIVE
  * content on your page — a responsive grid of gallery tiles that grows
  * to fit (no fixed-height iframe, no interior scrollbar). Clicking a
- * tile opens the real portal gallery in a lightbox (an embedded iframe
- * of that specific collection), so visitors browse and download without
- * leaving your site.
+ * tile opens that specific gallery in a lightbox (an embedded, deep-
+ * linked iframe of the real portal), so visitors browse and download
+ * without leaving your site.
+ *
+ * Styling defaults match the Theodore Roosevelt Presidential Library
+ * brand (Dharma Gothic E / Clearface / Frutiger; green #1B4633,
+ * terracotta #E7805D). Because the embed runs inside trlibrary.com,
+ * those fonts resolve from the host page. Every token is overridable
+ * via data-* attributes so the embed still works for any portal/site.
  *
  * How it gets the data
  *   The Acquia portal API blocks cross-origin browser requests, so the
- *   page can't read it directly. Instead a small scheduled job
+ *   page can't read it directly. A scheduled job
  *   (scripts/generate-portal-data.js via GitHub Actions) writes a static
- *   JSON snapshot that is served from your own domain with CORS enabled.
- *   This script fetches that snapshot and renders the tiles.
+ *   JSON snapshot served from your own domain with CORS enabled; this
+ *   script fetches that snapshot and renders the tiles.
  *
  * Usage (script-tag, auto-init):
  *   <script src="/acquia-portal-embed.js"
@@ -27,18 +33,36 @@
 (function (global) {
   'use strict';
 
+  var SANS = "'Frutiger','Frutiger Fallback','Helvetica Neue',Arial,sans-serif";
+  var DISPLAY = "'Dharma Gothic E','Dharma Gothic E Fallback','Oswald','Anton',sans-serif";
+
   var DEFAULTS = {
-    dataUrl: '',            // URL of the JSON snapshot (required)
-    target: '',             // CSS selector to render into (default: after the script tag)
-    minTile: 260,           // px: minimum tile width; grid auto-fills columns
-    gap: 18,                // px: grid gap
-    radius: 12,             // px: tile/lightbox corner radius
-    accent: '#1f5c3d',      // heading rule + count badge accent
+    dataUrl: '',                 // URL of the JSON snapshot (required)
+    target: '',                  // CSS selector to render into (default: after the script tag)
+
+    // Layout
+    minTile: 264,                // px: minimum tile width; grid auto-fills columns
+    gap: 20,                     // px: grid gap
+    radius: 2,                   // px: tile corner radius (TR uses near-square corners)
+    aspect: '3 / 2',             // tile image aspect ratio
+
+    // Brand palette (TR defaults)
+    accent: '#1B4633',           // primary green: headings, focus ring
+    rule: '#E7805D',             // terracotta: heading underline
+    badgeBg: '#E7805D',          // count badge background
+    badgeText: '#25282A',        // count badge text
+    titleColor: '#25282A',       // tile title text
+
+    // Typography (resolve from the host page's brand fonts)
+    headingFont: DISPLAY,
+    headingUppercase: true,
+    titleFont: SANS,
+
+    // Behavior
     showSectionHeadings: true,
     showCounts: true,
-    aspect: '3 / 2',        // tile image aspect ratio (CSS aspect-ratio value)
-    lightbox: true,         // open galleries in a lightbox; false = new tab
-    embedded: true,         // use Acquia's ?embedded=true mode in the lightbox
+    lightbox: true,              // open galleries in a lightbox; false = new tab
+    embedded: true,              // use Acquia's ?embedded=true mode in the lightbox
     title: 'Press gallery'
   };
 
@@ -57,43 +81,45 @@
 
   function injectCss(opts) {
     if (document.getElementById('ape-css')) return;
+    var upper = toBool(opts.headingUppercase, true) ? 'text-transform:uppercase;letter-spacing:.02em;' : '';
     var s = document.createElement('style');
     s.id = 'ape-css';
     s.textContent = [
-      '.ape{--ape-accent:' + opts.accent + ';--ape-radius:' + opts.radius + 'px;--ape-gap:' + opts.gap + 'px;width:100%;}',
-      '.ape-section{margin:0 0 32px;}',
-      '.ape-h{font-size:1.25rem;font-weight:700;letter-spacing:.01em;margin:0 0 14px;padding-bottom:8px;' +
-        'border-bottom:2px solid var(--ape-accent);display:inline-block;}',
+      '.ape{--ape-accent:' + opts.accent + ';--ape-rule:' + opts.rule + ';--ape-radius:' + opts.radius + 'px;--ape-gap:' + opts.gap + 'px;width:100%;}',
+      '.ape *{box-sizing:border-box;}',
+      '.ape-section{margin:0 0 38px;}',
+      '.ape-h{font-family:' + opts.headingFont + ';' + upper + 'font-weight:700;line-height:1;' +
+        'font-size:clamp(26px,3.4vw,40px);margin:0 0 16px;padding-bottom:8px;color:' + opts.accent + ';' +
+        'border-bottom:3px solid var(--ape-rule);display:inline-block;}',
       '.ape-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(' + opts.minTile + 'px,1fr));gap:var(--ape-gap);}',
-      '.ape-tile{position:relative;display:block;border:0;padding:0;text-align:left;cursor:pointer;background:#eceeed;' +
-        'border-radius:var(--ape-radius);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.10);' +
+      '.ape-tile{position:relative;display:block;border:0;padding:0;text-align:left;cursor:pointer;background:#eef0ef;' +
+        'border-radius:var(--ape-radius);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.12);' +
         'transition:transform .18s ease, box-shadow .18s ease;color:inherit;text-decoration:none;font:inherit;}',
-      '.ape-tile:hover,.ape-tile:focus-visible{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.18);outline:none;}',
+      '.ape-tile:hover,.ape-tile:focus-visible{transform:translateY(-3px);box-shadow:0 10px 24px rgba(27,70,51,.22);outline:none;}',
       '.ape-tile:focus-visible{box-shadow:0 0 0 3px var(--ape-accent);}',
-      '.ape-thumb{display:block;width:100%;aspect-ratio:' + opts.aspect + ';object-fit:cover;background:#dfe3e1;}',
-      '.ape-meta{padding:11px 13px 13px;}',
-      '.ape-title{font-size:.95rem;font-weight:650;line-height:1.3;margin:0;color:#1c2b24;}',
-      '.ape-count{display:inline-block;margin-top:6px;font-size:.75rem;font-weight:600;color:#fff;' +
-        'background:var(--ape-accent);border-radius:20px;padding:2px 9px;}',
-      '.ape-badge{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.6);color:#fff;font-size:.72rem;' +
-        'font-weight:600;padding:3px 9px;border-radius:20px;backdrop-filter:blur(2px);}',
-      '.ape-msg{padding:16px;border:1px dashed #c3ccc8;border-radius:8px;color:#4b5b53;font-size:.9rem;}',
-      '.ape-skel{border-radius:var(--ape-radius);overflow:hidden;background:#eceeed;}',
+      '.ape-thumb{display:block;width:100%;aspect-ratio:' + opts.aspect + ';object-fit:cover;background:#e2e6e4;}',
+      '.ape-meta{padding:12px 14px 14px;}',
+      '.ape-title{font-family:' + opts.titleFont + ';font-size:.95rem;font-weight:700;line-height:1.3;margin:0;color:' + opts.titleColor + ';}',
+      '.ape-badge{position:absolute;top:10px;right:10px;background:' + opts.badgeBg + ';color:' + opts.badgeText + ';' +
+        'font-family:' + opts.titleFont + ';font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:2px;}',
+      '.ape-msg{padding:16px;border:1px dashed #c3ccc8;border-radius:2px;color:#4b5b53;font-family:' + opts.titleFont + ';}',
+      '.ape-skel{border-radius:var(--ape-radius);overflow:hidden;background:#eef0ef;}',
       '.ape-skel .ape-thumb{animation:ape-pulse 1.3s ease-in-out infinite;}',
       '@keyframes ape-pulse{0%,100%{opacity:1}50%{opacity:.55}}',
       /* Lightbox */
       '.ape-lb{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;' +
-        'padding:min(4vw,40px);background:rgba(15,20,17,.72);opacity:0;transition:opacity .2s ease;}',
+        'padding:min(4vw,40px);background:rgba(20,30,24,.78);opacity:0;transition:opacity .2s ease;}',
       '.ape-lb.ape-open{opacity:1;}',
       '.ape-panel{position:relative;width:100%;max-width:1200px;height:100%;max-height:900px;display:flex;flex-direction:column;' +
-        'background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.45);}',
-      '.ape-bar{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #e6e9e7;background:#fafbfb;}',
-      '.ape-bar h3{margin:0;font-size:1rem;font-weight:700;color:#1c2b24;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
-      '.ape-open-new{font-size:.82rem;color:var(--ape-accent);text-decoration:none;font-weight:600;white-space:nowrap;}',
+        'background:#fff;border-radius:3px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.45);}',
+      '.ape-bar{display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid #e6e9e7;background:#fafbfb;}',
+      '.ape-bar h3{font-family:' + opts.titleFont + ';margin:0;font-size:1rem;font-weight:700;color:' + opts.titleColor + ';' +
+        'flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
+      '.ape-open-new{font-family:' + opts.titleFont + ';font-size:.82rem;color:' + opts.accent + ';text-decoration:none;font-weight:700;white-space:nowrap;}',
       '.ape-open-new:hover{text-decoration:underline;}',
-      '.ape-x{appearance:none;border:0;background:#eef1f0;width:34px;height:34px;border-radius:8px;cursor:pointer;' +
+      '.ape-x{appearance:none;border:0;background:#eef1f0;width:34px;height:34px;border-radius:2px;cursor:pointer;' +
         'font-size:20px;line-height:1;color:#333;display:flex;align-items:center;justify-content:center;}',
-      '.ape-x:hover{background:#e2e6e4;}',
+      '.ape-x:hover{background:' + opts.badgeBg + ';color:' + opts.badgeText + ';}',
       '.ape-lb iframe{flex:1;width:100%;border:0;background:#fff;}',
       'html.ape-lock,body.ape-lock{overflow:hidden;}'
     ].join('\n');
@@ -153,7 +179,6 @@
     document.documentElement.classList.add('ape-lock');
     document.body.classList.add('ape-lock');
     document.addEventListener('keydown', onKey, true);
-    // Force reflow then fade in.
     void overlay.offsetWidth;
     overlay.classList.add('ape-open');
     setTimeout(function () { try { x.focus(); } catch (e) {} }, 30);
@@ -220,7 +245,7 @@
     }
   }
 
-  function renderSkeleton(root, opts) {
+  function renderSkeleton(root) {
     root.innerHTML = '';
     var grid = el('div', 'ape-grid');
     for (var i = 0; i < 6; i++) {
@@ -250,7 +275,7 @@
     else if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.insertBefore(root, scriptEl.nextSibling);
     else document.body.appendChild(root);
 
-    renderSkeleton(root, opts);
+    renderSkeleton(root);
 
     fetch(opts.dataUrl, { cache: 'no-cache' })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -273,11 +298,18 @@
       target: d.target,
       minTile: d.minTile ? parseInt(d.minTile, 10) : undefined,
       gap: d.gap ? parseInt(d.gap, 10) : undefined,
-      radius: d.radius ? parseInt(d.radius, 10) : undefined,
+      radius: d.radius !== undefined ? parseInt(d.radius, 10) : undefined,
+      aspect: d.aspect,
       accent: d.accent,
+      rule: d.rule,
+      badgeBg: d.badgeBg,
+      badgeText: d.badgeText,
+      titleColor: d.titleColor,
+      headingFont: d.headingFont,
+      headingUppercase: d.headingUppercase,
+      titleFont: d.titleFont,
       showSectionHeadings: d.showSectionHeadings,
       showCounts: d.showCounts,
-      aspect: d.aspect,
       lightbox: d.lightbox,
       embedded: d.embedded,
       title: d.title
