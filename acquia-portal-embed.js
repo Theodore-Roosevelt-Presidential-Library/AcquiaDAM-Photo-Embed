@@ -128,6 +128,14 @@
     document.head.appendChild(s);
   }
 
+  // Cached thumbnails are stored as paths relative to the snapshot JSON.
+  // Resolve them against the data URL so they load from the Pages origin.
+  function resolveThumb(thumb, dataUrl) {
+    if (!thumb) return thumb;
+    if (/^(https?:)?\/\//.test(thumb) || /^data:/.test(thumb)) return thumb;
+    try { return new URL(thumb, dataUrl).href; } catch (e) { return thumb; }
+  }
+
   /* --------------------- Deep-link to a gallery --------------------- */
   // Acquia routes an interior gallery by PATH, not by hash:
   //   {portalUrl}/c/{collectionId}/s/{sectionId}
@@ -197,11 +205,12 @@
       ? el('button', 'ape-tile', { type: 'button' })
       : el('a', 'ape-tile', { href: deep, target: '_blank', rel: 'noopener' });
 
-    if (gallery.thumb) {
+    var thumbSrc = resolveThumb(gallery.thumb, opts.dataUrl);
+    if (thumbSrc) {
       var img = el('img', 'ape-thumb', {
-        src: gallery.thumb, alt: gallery.title, loading: 'lazy', decoding: 'async'
+        src: thumbSrc, alt: gallery.title, loading: 'lazy', decoding: 'async'
       });
-      if (gallery.thumb2x) img.setAttribute('srcset', gallery.thumb + ' 1x, ' + gallery.thumb2x + ' 2x');
+      if (gallery.thumb2x) img.setAttribute('srcset', thumbSrc + ' 1x, ' + resolveThumb(gallery.thumb2x, opts.dataUrl) + ' 2x');
       img.addEventListener('error', function () { img.style.visibility = 'hidden'; });
       tile.appendChild(img);
     } else {

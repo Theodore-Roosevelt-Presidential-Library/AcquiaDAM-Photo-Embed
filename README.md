@@ -11,8 +11,8 @@ Acquia portal ──(GitHub Action, every 6h)──▶ data/<shortcode>.json ─
                   scripts/generate-portal-data.js                     acquia-portal-embed.js renders tiles
 ```
 
-1. **Snapshot.** `scripts/generate-portal-data.js` fetches the portal's sections and galleries (titles, item counts, and Acquia's own pre-signed preview thumbnails) and writes a small static `data/<shortcode>.json`. It runs server-side, where Acquia's cross-origin block doesn't apply.
-2. **Host.** The JSON is committed to this repo and served by **GitHub Pages** (`https://portalphotos.labs.trlibrary.com/…`), which adds the CORS header the browser needs.
+1. **Snapshot + cache.** `scripts/generate-portal-data.js` fetches the portal's sections and galleries (titles, item counts) and writes a small static `data/<shortcode>.json`. It also **downloads each preview thumbnail** into `data/thumbs/<shortcode>/` and records a relative path — because Acquia's preview URLs are pre-signed and expire within ~1–2 hours, so hot-linking them makes images 403 intermittently. It runs server-side, where Acquia's cross-origin block doesn't apply.
+2. **Host.** The JSON *and the cached images* are committed to this repo and served by **GitHub Pages** (`https://portalphotos.labs.trlibrary.com/…`), which adds the CORS header the browser needs. The images are now permanent and never expire.
 3. **Render.** `acquia-portal-embed.js`, dropped on your site, fetches that JSON and builds the native tile grid. Because the tiles are ordinary page content, the block auto-sizes to fit — solving the fixed-height/scrollbar problem of a raw portal iframe.
 4. **Open.** Clicking a tile opens the real gallery, deep-linked by path (`…/PressPortal/c/{collectionId}/s/{sectionId}?embedded=true`), inside a lightbox iframe with its native download controls.
 
@@ -92,7 +92,7 @@ All options are `data-*` attributes on the `<script>` tag (or keys to `AcquiaPor
 
 ## Keeping it fresh
 
-Acquia's preview thumbnail URLs are pre-signed and **expire (~7 days)**. The GitHub Action (`.github/workflows/update-portal-data.yml`) regenerates the snapshot **every 6 hours**, so thumbnails are always refreshed well before expiry. You can also run it on demand from the repo's **Actions** tab, and it auto-runs whenever `config.json` or the generator changes.
+Acquia's preview thumbnail URLs are pre-signed and **expire within ~1–2 hours**, which is why the generator downloads and caches the images rather than hot-linking them — once cached they never expire. The GitHub Action (`.github/workflows/update-portal-data.yml`) re-runs the generator **every 6 hours** to pick up new or changed galleries and download any new thumbnails (existing images are skipped, so there's no churn). Set `FORCE_THUMBS=1` to force a full re-download. You can also run it on demand from the repo's **Actions** tab.
 
 ## Files
 
@@ -102,6 +102,7 @@ Acquia's preview thumbnail URLs are pre-signed and **expire (~7 days)**. The Git
 | `scripts/generate-portal-data.js` | Node generator that writes the `data/<shortcode>.json` snapshot. |
 | `config.json` | List of portals to snapshot. |
 | `data/<shortcode>.json` | Generated snapshot(s), served via GitHub Pages. |
+| `data/thumbs/<shortcode>/` | Cached preview images (committed + served via Pages). |
 | `.github/workflows/update-portal-data.yml` | Scheduled refresh (every 6h) + manual trigger. |
 | `demo.html` | Working demo, preconfigured for the TR Library Press Portal. |
 
